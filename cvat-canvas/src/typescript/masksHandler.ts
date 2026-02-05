@@ -63,6 +63,7 @@ export class MasksHandlerImpl implements MasksHandler {
     private colorBy: ColorBy;
     private latestMousePos: Position;
     private startTimestamp: number;
+    private renderScheduled: boolean = false;
     private geometry: Geometry;
     private drawingOpacity: number;
     private isHidden: boolean;
@@ -80,6 +81,20 @@ export class MasksHandlerImpl implements MasksHandler {
             this.canvas.remove(this.brushMarker);
             this.brushMarker = null;
             this.canvas.renderAll();
+        }
+    }
+
+    /**
+     * Request a single render on the next animation frame.
+     * Used in mouse:move to cap render rate at ~60 FPS while keeping full input precision.
+     */
+    private requestRender(): void {
+        if (!this.renderScheduled) {
+            this.renderScheduled = true;
+            requestAnimationFrame(() => {
+                this.canvas.renderAll();
+                this.renderScheduled = false;
+            });
         }
     }
 
@@ -105,6 +120,7 @@ export class MasksHandlerImpl implements MasksHandler {
 
             this.canvas.defaultCursor = 'none';
             this.canvas.add(this.brushMarker);
+            this.requestRender();
         } else {
             this.canvas.defaultCursor = 'inherit';
         }
@@ -380,6 +396,7 @@ export class MasksHandlerImpl implements MasksHandler {
             fireRightClick: true,
             selection: false,
             defaultCursor: 'inherit',
+            renderOnAddRemove: false,
         });
         this.canvas.imageSmoothingEnabled = false;
         this.drawnObjects = this.createDrawnObjectsArray();
@@ -443,7 +460,7 @@ export class MasksHandlerImpl implements MasksHandler {
                 if (object && object instanceof fabric.Image) {
                     object.left = position.x - object.width / 2;
                     object.top = position.y - object.height / 2;
-                    this.canvas.renderAll();
+                    this.requestRender();
                 }
             }
 
@@ -472,7 +489,7 @@ export class MasksHandlerImpl implements MasksHandler {
                 this.brushMarker.left = position.x - tool.size / 2;
                 this.brushMarker.top = position.y - tool.size / 2;
                 this.canvas.bringToFront(this.brushMarker);
-                this.canvas.renderAll();
+                this.requestRender();
             }
 
             if (isMouseDown && !this.isHidden && !isBrushSizeChanging && ['brush', 'eraser'].includes(tool?.type)) {
@@ -534,7 +551,7 @@ export class MasksHandlerImpl implements MasksHandler {
                         }
                     }
                 }
-                this.canvas.renderAll();
+                this.requestRender();
             } else if (tool?.type.startsWith('polygon-') && this.drawablePolygon) {
                 // update the polygon position
                 const points = this.drawablePolygon.get('points');
@@ -542,7 +559,7 @@ export class MasksHandlerImpl implements MasksHandler {
                     points[points.length - 1].setX(e.e.offsetX);
                     points[points.length - 1].setY(e.e.offsetY);
                 }
-                this.canvas.renderAll();
+                this.requestRender();
             }
 
             this.latestMousePos.x = position.x;
